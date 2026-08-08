@@ -135,6 +135,7 @@ export function LoginForm() {
 
             <Link
               href="/recuperar-senha"
+              prefetch={false}
               className="rounded-sm text-note font-medium text-content-secondary underline-offset-4 outline-none transition-colors hover:text-free hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
               Esqueci a senha
