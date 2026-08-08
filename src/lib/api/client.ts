@@ -1,17 +1,26 @@
-import { env } from "@/config/env";
-import { ApiError } from "./errors";
+import { envServer } from "@/config/env.server";
+import { ApiError, type ApiIssue } from "./errors";
 
 export interface ApiFetchOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
+  token?: string;
+  timeoutMs?: number;
 }
 
 export async function apiFetch<T>(
   endpoint: string,
   options: ApiFetchOptions = {}
 ): Promise<T> {
-  const { params, headers, ...customConfig } = options;
+  const {
+    params,
+    token,
+    headers,
+    timeoutMs = envServer.timeoutMs,
+    signal: customSignal,
+    ...customConfig
+  } = options;
 
-  const url = new URL(endpoint, env.apiUrl);
+  const url = new URL(endpoint, envServer.apiUrl);
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined) {
@@ -20,9 +29,18 @@ export async function apiFetch<T>(
     });
   }
 
-  const defaultHeaders: HeadersInit = {
+  const defaultHeaders: Record<string, string> = {
     "Content-Type": "application/json",
   };
+
+  if (token) {
+    defaultHeaders["Authorization"] = `Bearer ${token}`;
+  }
+
+  const timeoutSignal = AbortSignal.timeout(timeoutMs);
+  const combinedSignal = customSignal
+    ? AbortSignal.any([customSignal, timeoutSignal])
+    : timeoutSignal;
 
   let response: Response;
   try {
@@ -31,21 +49,41 @@ export async function apiFetch<T>(
         ...defaultHeaders,
         ...headers,
       },
+      signal: combinedSignal,
       ...customConfig,
     });
-  } catch (err) {
+  } catch (err: unknown) {
+    const isAbort =
+      err instanceof Error &&
+      (err.name === "AbortError" || err.name === "TimeoutError");
+
+    if (isAbort) {
+      throw new ApiError(
+        504,
+        `Requisição à API excedeu o tempo limite de ${timeoutMs}ms.`,
+        { data: err }
+      );
+    }
     throw new ApiError(
       503,
-      `API Backend indisponível (${env.apiUrl}). Verifique se o servidor backend está rodando.`,
-      err
+      `API Backend indisponível (${envServer.apiUrl}). Verifique se o servidor backend está rodando.`,
+      { data: err }
     );
   }
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => null);
+    const body = await response.json().catch(() => null);
+    const code = typeof body?.code === "string" ? body.code : undefined;
+    const issues = Array.isArray(body?.message)
+      ? (body.message as ApiIssue[])
+      : undefined;
+
     const message =
-      errorData?.message || `Requisição falhou com status ${response.status}`;
-    throw new ApiError(response.status, message, errorData);
+      typeof body?.message === "string"
+        ? body.message
+        : `Requisição falhou com status ${response.status}`;
+
+    throw new ApiError(response.status, message, { code, issues, data: body });
   }
 
   if (response.status === 204) {

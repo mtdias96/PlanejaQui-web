@@ -1,134 +1,168 @@
 "use client";
 
+import { startTransition, useActionState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import {
-  useId,
-  useState,
-  type ChangeEvent,
-  type SubmitEvent,
-} from "react";
-import { ArrowRight, Lock, Mail } from "lucide-react";
+import { ArrowRight, Loader2, Lock, Mail } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldLabel, FieldMessage } from "@/components/ui/field";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import {
   InputGroup,
   InputGroupIcon,
   InputGroupInput,
 } from "@/components/ui/input-group";
-import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
-import { Separator } from "@/components/ui/separator";
-import { parseLoginForm } from "@/features/auth/schema";
-import type { LoginFieldErrors } from "@/features/auth/types";
-import { SocialAuthButtons } from "./social-auth-buttons";
+import { signInAction } from "@/features/auth/data/actions";
+import { loginSchema, type LoginInput } from "@/features/auth/model/schema";
 
 export function LoginForm() {
-  const [errors, setErrors] = useState<LoginFieldErrors>({});
+  const [state, formAction, isPending] = useActionState(signInAction, {});
 
-  const emailId = useId();
-  const passwordId = useId();
-  const rememberId = useId();
+  const form = useForm<LoginInput>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: "", password: "", remember: true },
+  });
 
-  function validate(form: HTMLFormElement): boolean {
-    const { errors: found } = parseLoginForm(new FormData(form));
-    setErrors(found ?? {});
-    return found === null;
-  }
+  // Erro do servidor → RHF. Inclusive o erro de formulário, via `root`.
+  useEffect(() => {
+    if (state.fieldErrors) {
+      for (const field of ["email", "password"] as const) {
+        const message = state.fieldErrors[field];
+        if (message) {
+          form.setError(field, { type: "server", message });
+        }
+      }
+    }
+    if (state.formError) {
+      form.setError("root.serverError", { type: "server", message: state.formError });
+    }
+  }, [state, form]);
 
-  function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!validate(event.currentTarget)) return;
-  }
+  const rootError = form.formState.errors.root?.serverError?.message;
 
-  function handleChange(event: ChangeEvent<HTMLFormElement>) {
-    if (Object.keys(errors).length === 0) return;
-    validate(event.currentTarget);
-  }
+  const onSubmit = form.handleSubmit((values) => {
+    // Chamada programática da action exige transition (React 19).
+    startTransition(() => formAction(values));
+  });
 
   return (
     <div className="space-y-6">
-      <form
-        onSubmit={handleSubmit}
-        onChange={handleChange}
-        className="space-y-5"
-        noValidate
-      >
-        <Field>
-          <FieldLabel htmlFor={emailId}>E-mail</FieldLabel>
-          <InputGroup>
-            <InputGroupIcon>
-              <Mail />
-            </InputGroupIcon>
-            <InputGroupInput
-              id={emailId}
-              name="email"
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              autoCapitalize="none"
-              spellCheck={false}
-              placeholder="voce@email.com"
-              required
-              aria-invalid={errors.email ? true : undefined}
-              aria-describedby={errors.email ? `${emailId}-error` : undefined}
-            />
-          </InputGroup>
-          {errors.email ? (
-            <FieldMessage id={`${emailId}-error`}>{errors.email}</FieldMessage>
-          ) : null}
-        </Field>
+      {rootError ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger"
+        >
+          {rootError}
+        </div>
+      ) : null}
 
-        <Field>
-          <FieldLabel htmlFor={passwordId}>Senha</FieldLabel>
-          <PasswordInput
-            id={passwordId}
-            name="password"
-            autoComplete="current-password"
-            placeholder="Sua senha"
-            required
-            icon={<Lock />}
-            aria-invalid={errors.password ? true : undefined}
-            aria-describedby={
-              errors.password ? `${passwordId}-error` : undefined
-            }
+      <Form {...form}>
+        <form onSubmit={onSubmit} className="space-y-5" noValidate>
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>E-mail</FormLabel>
+                <InputGroup>
+                  <InputGroupIcon>
+                    <Mail />
+                  </InputGroupIcon>
+                  <FormControl>
+                    <InputGroupInput
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      placeholder="voce@email.com"
+                      {...field}
+                    />
+                  </FormControl>
+                </InputGroup>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-          {errors.password ? (
-            <FieldMessage id={`${passwordId}-error`}>
-              {errors.password}
-            </FieldMessage>
-          ) : null}
-        </Field>
 
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-          <div className="flex items-center gap-2.5">
-            <Checkbox id={rememberId} name="remember" defaultChecked />
-            <Label
-              htmlFor={rememberId}
-              className="text-note font-medium text-content-secondary"
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Senha</FormLabel>
+                <FormControl>
+                  <PasswordInput
+                    autoComplete="current-password"
+                    placeholder="Sua senha"
+                    icon={<Lock />}
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+            <FormField
+              control={form.control}
+              name="remember"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center gap-2.5 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormLabel className="text-note font-medium text-content-secondary normal-case">
+                    Lembrar de mim
+                  </FormLabel>
+                </FormItem>
+              )}
+            />
+
+            <Link
+              href="/recuperar-senha"
+              prefetch={false}
+              className="rounded-sm text-note font-medium text-content-secondary underline-offset-4 outline-none transition-colors hover:text-free hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
-              Lembrar de mim
-            </Label>
+              Esqueci a senha
+            </Link>
           </div>
 
-          <Link
-            href="/recuperar-senha"
-            className="rounded-sm text-note font-medium text-content-secondary underline-offset-4 outline-none transition-colors hover:text-free hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          <Button
+            type="submit"
+            variant="free"
+            size="cta"
+            className="w-full"
+            disabled={isPending}
           >
-            Esqueci a senha
-          </Link>
-        </div>
-
-        <Button type="submit" variant="free" size="cta" className="w-full">
-          Entrar
-          <ArrowRight aria-hidden="true" />
-        </Button>
-      </form>
-
-      <Separator label="ou" />
-
-      <SocialAuthButtons />
+            {isPending ? (
+              <>
+                <Loader2 className="animate-spin" aria-hidden="true" />
+                Entrando...
+              </>
+            ) : (
+              <>
+                Entrar
+                <ArrowRight aria-hidden="true" />
+              </>
+            )}
+          </Button>
+        </form>
+      </Form>
     </div>
   );
 }
