@@ -21,6 +21,34 @@ This version has breaking changes — APIs, conventions, and file structure may 
 3. **Feature não importa feature.** Se `transacoes` precisa de algo de `envelopes`, esse algo sobe: visual vai para `components/ui`, lógica vai para `lib`. Exceção honesta: `features/auth/session.ts` (ler/validar sessão no server).
 4. **Componente não faz I/O.** Quem busca é `page.tsx` ou `queries.ts`. Quem escreve é `actions.ts`.
 5. **Server Component por padrão.** `"use client"` só na folha que realmente precisa de estado/evento (`Money`, `Card`, `StatTile` continuam server).
-6. **Anatomia de feature sob demanda:** `queries.ts` (leitura), `actions.ts` ("use server"), `schema.ts` (validação), `types.ts` (contrato), `compute.ts` (derivação pura sem I/O), `components/` (componentes do domínio) e `use-*.ts` (hooks client).
-7. **Convenções de nomes:** Arquivos em `kebab-case`. Componentes em `PascalCase`. Pastas de feature no singular/plural do domínio em PT-BR (`envelopes`, `transacoes`, `contas`, `metas`).
+6. **A fronteira client desce até o ponto mais profundo possível.** `"use client"` é contagioso: tudo que o arquivo marcado importa entra no bundle do client junto. Por isso a diretiva nunca vai no componente mais ao topo — vai no componente folha que de fato precisa de estado, evento ou API de browser.
+   - Se o pai é server, ele **continua** server. O pedaço interativo é extraído para um componente client à parte e o pai só o renderiza.
+   - Nunca marcar `page.tsx`, `layout.tsx` ou um container de seção como client só porque um filho é interativo.
+   - Ao encontrar um `"use client"` alto demais, empurrar para baixo: quebrar o componente e mover a diretiva para a folha.
+   - Conteúdo estático que vive dentro de um componente client deve entrar via `children`/props (composição), para permanecer renderizado no server.
+   ```
+   ❌ SectionCard ("use client")        ✅ SectionCard (server)
+        └── Header (vira client)             ├── Header (server)
+        └── Chart  (vira client)             ├── Chart  (server)
+        └── Toggle (precisa de estado)       └── Toggle ("use client") ← só aqui
+   ```
+7. **Anatomia de feature em pastas por assunto.** Cada feature agrupa seus arquivos em pastas — nunca soltos na raiz da feature. Pastas sob demanda: só cria a que precisar.
+   - **`data/`** — tudo que fala com o backend: `api.ts` (transporte HTTP), `queries.ts` (leitura), `actions.ts` (`"use server"`, escrita).
+   - **`model/`** — contrato e regra pura, sem I/O: `types.ts`, `schema.ts` (zod), `compute.ts` (derivação) e os testes co-locados (`*.test.ts`).
+   - **`session/`** — sessão e proteção de rota: `session.ts` (cookies + estado), `guard.ts` (consumido pelo `proxy.ts`). Exclusiva de `auth`.
+   - **`components/`** — componentes do domínio e `use-*.ts` (hooks client).
+   ```
+   features/auth/
+   ├── data/        api.ts · queries.ts · actions.ts
+   ├── model/       types.ts · schema.ts · compute.ts · *.test.ts
+   ├── session/     session.ts · guard.ts
+   └── components/  login-form.tsx · sign-out-button.tsx · auth-showcase.tsx
+   ```
+8. **Convenções de nomes:** Arquivos em `kebab-case`. Componentes em `PascalCase`. Pastas de feature no singular/plural do domínio em PT-BR (`envelopes`, `transacoes`, `contas`, `metas`).
+9. **Camadas base e layout:** `config/` é a camada base (env). `components/layout/` guarda primitivos de composição de página (`Screen`, `Section`). Direção completa: `app → features → components → lib → config`.
+10. **Fronteira RHF:** `components/ui/form.tsx` é a **única** fronteira sancionada do react-hook-form. Nenhuma feature importa RHF direto.
+11. **Ausência de barrels em features:** **Proibido barrel `index.ts` em `features/`** — mistura `server-only` com `"use server"` e vaza código de servidor para o bundle do client. A superfície pública se documenta aqui, não se centraliza em arquivo.
+12. **Validação em schema.ts:** Validação de formulário e de resposta de API mora em `schema.ts`, com zod. Mensagens sempre em PT-BR; nunca repassar texto de erro do backend.
+13. **`src/proxy.ts` é convenção do Next, não código solto.** O arquivo *precisa* estar na raiz de `src/`, no mesmo nível de `app/` — é onde o framework procura, e movê-lo faz o guard parar de rodar **em silêncio**. Só um por projeto. Mas a **lógica** não mora nele: cada domínio expõe seu módulo (`features/auth/guard.ts`) e o `proxy.ts` só acopla e exporta o `matcher`.
+
 

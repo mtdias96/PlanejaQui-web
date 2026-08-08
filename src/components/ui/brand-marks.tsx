@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 /**
  * Marcas de terceiros usadas em login social.
  * As cores vivem no namespace `--brand-*` de `globals.css` — nada de hex aqui.
+ * Nota: Primitivo mantido no kit UI para integrações futuras de login social (sem consumidor no momento).
  */
 type MarkProps = React.ComponentPropsWithoutRef<"svg">
 
