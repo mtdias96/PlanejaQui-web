@@ -1,31 +1,20 @@
+import type { Metadata } from "next";
 import { Screen } from "@/components/layout/screen";
-import { Section } from "@/components/layout/section";
-import { StatTile } from "@/components/ui/stat-tile";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Overline } from "@/components/ui/overline";
+import { DashboardView } from "@/features/dashboard/components/dashboard-view";
+import { getDashboardData } from "@/features/dashboard/data/queries";
 
-export default function DashboardPage() {
+export const metadata: Metadata = {
+  title: "Dashboard | PlanejaQui",
+  description:
+    "Visão geral das finanças, sobra prevista, ritmo de gastos e compromissos do PlanejaQui.",
+};
+
+export default async function DashboardPage() {
+  const summary = await getDashboardData();
+
   return (
-    <Screen className="py-8 space-y-8">
-      <header className="space-y-1">
-        <Overline>Visão Geral</Overline>
-        <h1 className="text-display font-bold">Painel Financeiro</h1>
-      </header>
-
-      <Section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatTile label="Dinheiro Livre" cents={345080} tone="free" showSign />
-        <StatTile label="Reservado em Envelopes" cents={180000} tone="intention" />
-        <StatTile label="Faturas Pendentes" cents={-65000} tone="auto" />
-      </Section>
-
-      <Card tone="neutral">
-        <CardHeader>
-          <CardTitle>Benvindo ao PlanejaQui Web</CardTitle>
-        </CardHeader>
-        <CardContent className="text-body text-content-secondary">
-          Seu planejamento financeiro estruturado com Server Components, Design Tokens nativos e suporte a Open Finance.
-        </CardContent>
-      </Card>
+    <Screen className="max-w-7xl px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+      <DashboardView summary={summary} />
     </Screen>
   );
 }
